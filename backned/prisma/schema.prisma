@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum Role {
+  USER
+  AUTHOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  PENDING
+}
+
+enum BookStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BorrowStatus {
+  REQUESTED
+  APPROVED
+  BORROWED
+  RETURNED
+  OVERDUE
+  CANCELLED
+}
+
+// ==========================================
+// USER
+// ==========================================
+
+model User {
+  id       String     @id @default(uuid())
+  email    String     @unique
+  password String
+  name     String
+  avatar   String?
+  role     Role       @default(USER)
+  status   UserStatus @default(ACTIVE)
+
+  authorProfile       AuthorProfile?
+  reviews             Review[]
+  borrowRecords       BorrowRecord[]
+  favorites           Favorite[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ==========================================
+// REFRESH TOKEN
+// ==========================================
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ==========================================
+// PASSWORD RESET TOKEN
+// ==========================================
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ==========================================
+// AUTHOR PROFILE
+// ==========================================
+
+model AuthorProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  penName     String?
+  bio         String? @db.Text
+  website     String?
+  socialLinks Json?
+
+  books Book[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("author_profiles")
+}
+
+// ==========================================
+// CATEGORY
+// ==========================================
+
+model Category {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  slug        String  @unique
+  description String? @db.Text
+
+  books Book[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+// ==========================================
+// BOOK
+// ==========================================
+
+model Book {
+  id            String     @id @default(uuid())
+  title         String
+  slug          String     @unique
+  isbn          String?    @unique
+  description   String?    @db.Text
+  coverImage    String?
+  pageCount     Int?
+  publishedYear Int?
+  language      String     @default("English")
+  price         Decimal?   @default(0.0) @db.Decimal(10, 2)
+  stockQuantity Int        @default(1)
+  status        BookStatus @default(DRAFT)
+
+  authorId String
+  author   AuthorProfile @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  reviews       Review[]
+  borrowRecords BorrowRecord[]
+  favorites     Favorite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([title])
+  @@index([authorId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("books")
+}
+
+// ==========================================
+// REVIEW
+// ==========================================
+
+model Review {
+  id      String  @id @default(uuid())
+  rating  Int
+  comment String? @db.Text
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, bookId])
+  @@index([bookId])
+  @@map("reviews")
+}
+
+// ==========================================
+// FAVORITE
+// ==========================================
+
+model Favorite {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, bookId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+// ==========================================
+// BORROW RECORD
+// ==========================================
+
+model BorrowRecord {
+  id     String       @id @default(uuid())
+  status BorrowStatus @default(REQUESTED)
+
+  borrowDate        DateTime?
+  dueDate           DateTime?
+  returnDate        DateTime?
+  returnRequestedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([bookId])
+  @@index([status])
+  @@map("borrow_records")
+}
